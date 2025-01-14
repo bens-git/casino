@@ -139,7 +139,7 @@ class TransactionController extends Controller
             'name' => 'required|string|max:255',
             'type' => 'required|string|max:255',
             'party_id' => 'required|integer|exists:parties,id',
-            'amount' => 'required|numeric|min:0.01',
+            'amount' => 'required|numeric',
             'date' => 'required|date',
             'payment_method' => 'nullable|string|max:255',
             'details' => 'nullable|string|max:255',
