@@ -166,8 +166,7 @@ class DraftController extends Controller
             'user_id' => 'required|integer|exists:users,id',
             'recipient_id' => 'nullable|integer|exists:users,id',
             'recurrence_type' => 'required|string|max:255',
-            'recurrence_start_date' => 'nullable|date',
-            'recurrence_end_date' => 'nullable|date',
+            'recurrence_start_month' => 'nullable|integer',
         ]);
 
         $draft = Draft::create($validated);
@@ -246,9 +245,9 @@ class DraftController extends Controller
             'user_id' => 'nullable|integer|exists:users,id',
             'recipient_id' => 'nullable|integer|exists:users,id',
             'recurrence_type' => 'nullable|string|max:255',
-            'recurrence_start_date' => 'nullable|date',
-            'recurrence_end_date' => 'nullable|date',
+            'recurrence_start_month' => 'nullable|integer',
         ]);
+        
 
         $draft = Draft::findOrFail($id);
         $draft->fill($validated);

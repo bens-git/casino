@@ -116,11 +116,12 @@
         :error-messages="responseStore?.response?.errors[0]?.recurrence_type"
       />
 
-      <v-date-input
-        label="Recurrence Start Month"
+      <v-select
         v-if="localDraft.recurrence_type == 'YEARLY'"
         density="compact"
         v-model="localDraft.recurrence_start_month"
+        :items="months"
+        label="Recurrence Start Month"
       />
     </v-card-text>
     <v-card-actions>
@@ -175,6 +176,8 @@ const emit = defineEmits([
 ]);
 
 const localDraft = ref({});
+
+const months = [1,2,3,4,5,6,7,8,9,10,11,12]
 
 const handlePartyCreated = (partyId) => {
   localDraft.value.party_id = draftStore.selectedPartyId;
