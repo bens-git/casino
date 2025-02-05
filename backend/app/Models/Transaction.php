@@ -10,7 +10,7 @@ class Transaction extends Model
     use HasFactory;
     public $timestamps = false; // Disable automatic timestamps
 
-    protected $fillable = ['name', 'type', 'party_id', 'amount', 'date', 'payment_method', 'details', 'tag', 'user_id', 'recipient_id', 'recurrence_type', 'recurrence_start_date', 'recurrence_end_date'];
+    protected $fillable = ['name', 'type', 'party_id', 'amount', 'date', 'payment_method', 'details', 'tag', 'user_id', 'recipient_id', 'recurrence_type', 'recurrence_start_date', 'recurrence_end_date', 'validated'];
 
     public function user()
     {

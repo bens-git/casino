@@ -210,6 +210,7 @@ class TransactionController extends Controller
             'tag' => 'nullable|string|max:255',
             'user_id' => 'nullable|integer|exists:users,id',
             'recipient_id' => 'nullable|integer|exists:users,id',
+            'validated' => 'nullable|boolean',
         ]);
 
         $transaction = Transaction::findOrFail($id);

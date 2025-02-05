@@ -112,6 +112,18 @@
         item-title="name"
         :error-messages="responseStore?.response?.errors[0]?.recipient_id"
       />
+
+      <v-switch
+        v-if="localTransaction.type == 'BILL'"
+        v-model="localTransaction.validated"
+        label="Validate Bill"
+        color="primary"
+        :true-value="1"
+        :false-value="0"
+      ></v-switch>
+      <p>
+        Bill is {{ localTransaction.validated ? "Validated" : "Not Validated" }}
+      </p>
     </v-card-text>
     <v-card-actions>
       <v-btn color="primary" @click="saveTransaction">{{

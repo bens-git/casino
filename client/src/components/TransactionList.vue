@@ -263,6 +263,12 @@ const headers = [
     sortable: true,
     key: "date",
   },
+  {
+    title: "Validated",
+    align: "start",
+    sortable: true,
+    key: "validated",
+  },
 ];
 
 const debounceSearch = _.debounce(() => {
