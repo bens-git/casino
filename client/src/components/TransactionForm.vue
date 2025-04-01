@@ -235,12 +235,12 @@ const saveTransaction = async () => {
   // Append all properties of local transaction except images handling
   for (let [key, value] of Object.entries(localTransaction.value)) {
     if (
-      (key == "date" ||
-        key == "recurrence_start_date" ||
-        key == "recurrence_end_date") &&
+      (key == "date" ) &&
       value
     ) {
-      value = value.toISOString().split("T")[0];
+      value = value.toLocaleDateString('en-CA').split("T")[0];
+      console.log(value)
+
     }
 
     // Skip keys with null values or replace them with actual null
@@ -261,10 +261,8 @@ const saveTransaction = async () => {
       closeModal();
       transactionStore.fetchTransactions();
     } else {
-      console.log("Error:", responseStore.response.message);
     }
   } catch (error) {
-    console.error("Unexpected Error:", error);
     responseStore.setResponse(false, error.response.data.message, [
       error.response.data.errors,
     ]);
@@ -273,7 +271,6 @@ const saveTransaction = async () => {
 
 // Close modal logic
 const closeModal = () => {
-  console.log("attempt-close");
   emit("close-modal");
 };
 </script>

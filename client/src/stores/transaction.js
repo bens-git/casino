@@ -79,7 +79,6 @@ export const useTransactionStore = defineStore("transaction", {
         this.transactions = data.transactions;
         this.totalTransactions = data.count;
       } catch (error) {
-        console.log(error);
         responseStore.setResponse(false, error.response.data.message, [
           error.response.data.errors,
         ]);
@@ -206,12 +205,10 @@ export const useTransactionStore = defineStore("transaction", {
         const response = await apiClient.post("/transactions", data, {
           headers: { "Content-Type": "multipart/form-data" },
         });
-        console.log(response);
         this.selectedTransactionId = response.data.id;
         this.fetchTransactions();
         responseStore.setResponse(true, "Transaction created successfully");
       } catch (error) {
-        console.log(error);
         responseStore.setResponse(false, error.response.data.message, [
           error.response.data.errors,
         ]);
@@ -236,7 +233,6 @@ export const useTransactionStore = defineStore("transaction", {
         draftStore.fetchParties();
         responseStore.setResponse(true, "Party created successfully");
       } catch (error) {
-        console.log(error);
         responseStore.setResponse(false, error.response.data.message, [
           error.response.data.errors,
         ]);

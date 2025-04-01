@@ -70,6 +70,8 @@ class TransactionController extends Controller
         // Apply sorting
         $query->orderBy($sortBy, $order);
 
+        logger($query->toSql());
+
 
         // Apply pagination
         if ($itemsPerPage == -1) {

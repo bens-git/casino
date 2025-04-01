@@ -18,7 +18,6 @@ export const useResponseStore = defineStore("response", {
       };
 
       // Check if the user is not authenticated
-      console.log(message);
       if (message === "Unauthenticated." && !success) {
         const userStore = useUserStore();
 
