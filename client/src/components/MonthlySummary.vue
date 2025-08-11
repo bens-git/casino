@@ -36,7 +36,6 @@
             />
           </v-col>
         </v-row>
-
         <div
           v-if="transactionStore.selectedMonth && transactionStore.selectedYear"
         >
@@ -456,6 +455,7 @@ const calculation = computed(() => {
 
 const userMaintenanceTransactions = computed(() => (userId, type) => {
   return transactionStore.transactions.filter((transaction) => {
+    console.log(transaction)
     return (
       transaction.type === type &&
       transaction.user_id === userId &&
