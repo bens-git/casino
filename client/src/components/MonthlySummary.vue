@@ -39,7 +39,11 @@
         <div
           v-if="transactionStore.selectedMonth && transactionStore.selectedYear"
         >
+      
           <div v-for="user in transactionStore.users" :key="user.id">
+              {{userMaintenanceTransactions(user.id, 'PURCHASE')}}
+
+        {{ userMaintenanceTransactions(user.id, 'PURCHASE').length }}
             <v-data-table
               v-if="userMaintenanceTransactions(user.id, 'PURCHASE').length"
               :items="userMaintenanceTransactions(user.id, 'PURCHASE')"
@@ -455,7 +459,6 @@ const calculation = computed(() => {
 
 const userMaintenanceTransactions = computed(() => (userId, type) => {
   return transactionStore.transactions.filter((transaction) => {
-    console.log(transaction)
     return (
       transaction.type === type &&
       transaction.user_id === userId &&
