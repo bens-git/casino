@@ -370,7 +370,7 @@ function totalMaintenancePurchases(userId) {
   return totalOfTransactions(
     transactionStore.transactions.filter(function (transaction) {
       return (
-        transaction.user_id == userId &&
+        transaction.user.id == userId &&
         transaction.tag == "MAINTENANCE" &&
         transaction.type == "PURCHASE"
       );
@@ -382,7 +382,7 @@ function totalMaintenanceBills(userId) {
   return totalOfTransactions(
     transactionStore.transactions.filter(function (transaction) {
       return (
-        transaction.user_id == userId &&
+        transaction.user.id == userId &&
         transaction.tag == "MAINTENANCE" &&
         transaction.type == "BILL"
       );
@@ -393,7 +393,7 @@ function totalMaintenanceIncomes(userId) {
   return totalOfTransactions(
     transactionStore.transactions.filter(function (transaction) {
       return (
-        transaction.user_id == userId &&
+        transaction.user.id == userId &&
         transaction.tag == "MAINTENANCE" &&
         transaction.type == "INCOME"
       );
@@ -417,7 +417,7 @@ function totalGifts(userId) {
     transactionStore.transactions.filter(function (transaction) {
       return (
         transaction.type == "PURCHASE" &&
-        transaction.user_id == userId &&
+        transaction.user.id == userId &&
         transaction.recipient_id
       );
     })
@@ -454,17 +454,11 @@ const calculation = computed(() => {
 });
 
 const userMaintenanceTransactions = computed(() => (userId, type) => {
-  console.log(userId, type);
   return transactionStore.transactions.filter((transaction) => {
-    console.log(transaction);
-    console.log(
-      transaction.type === type,
-      transaction.user_id === userId,
-      transaction.tag === "MAINTENANCE"
-    );
+    
     return (
       transaction.type === type &&
-      transaction.user_id === userId &&
+      transaction.user.id === userId &&
       transaction.tag === "MAINTENANCE"
     );
   });
@@ -472,7 +466,7 @@ const userMaintenanceTransactions = computed(() => (userId, type) => {
 
 const userGiftTransactions = computed(() => (userId) => {
   return transactionStore.transactions.filter((transaction) => {
-    return transaction.user_id === userId && transaction.recipient_id;
+    return transaction.user.id === userId && transaction.recipient_id;
   });
 });
 
