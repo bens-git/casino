@@ -1,93 +1,214 @@
 <template>
-  <v-app-bar app dark>
-    <v-app-bar-title>
-      <v-img
-        src="@/assets/logo.svg"
-        alt="Logo"
-        contain
-        max-height="40"
-        max-width="40"
-      />
-    </v-app-bar-title>
+  <v-app-bar flat class="casino-app-bar">
+    <v-app-bar-nav-icon @click="drawer = !drawer" />
 
-    <v-toolbar-title> Accounting </v-toolbar-title>
+    <!-- Logo / Brand -->
+    <v-btn
+      v-if="!mobile"
+      :class="{ 'v-btn--active': isActive('/landing-page') }"
+      to="/"
+      text
+    >
+      <v-icon size="32" color="amber">mdi-cards</v-icon>
+      <span class="logo-text">{{ appTitle }}</span>
+    </v-btn>
 
     <v-spacer />
 
-    <div v-for="link in links" :key="link.text">
-      <!-- Debug output to help with identifying matching logic -->
-      <v-btn
-        v-if="link.route"
-        :to="link.route"
-        text
-        :class="{ active: isActiveRoute(link.route) }"
-      >
-        {{ link.text }}
-      </v-btn>
-      <v-btn v-else :href="link.url" text>
-        {{ link.text }}
-      </v-btn>
-    </div>
+    <!-- Desktop menu links -->
+    <v-btn
+      text
+      :class="{ 'v-btn--active': isActive('/play') }"
+      @click="go('/play')"
+    >
+      Play
+    </v-btn>
 
+    <v-btn
+      text
+      :class="{ 'v-btn--active': isActive('/how-it-works') }"
+      @click="go('/how-it-works')"
+    >
+      How It Works
+    </v-btn>
+
+    <v-btn
+      text
+      :class="{ 'v-btn--active': isActive('/support') }"
+      @click="go('/support')"
+    >
+      Support
+    </v-btn>
+
+    <LoginDialog
+      v-if="!userStore.user && !isActiveRoute('/login-form')"
+      :block="false"
+    />
+    <RegistrationDialog v-if="!userStore.user" :block="false" />
     <v-spacer />
 
     <v-menu v-if="userStore.user">
-      <template v-slot:activator="{ props }">
-        <v-btn color="primary" v-bind="props">
-          {{ userStore.user.name }}
-          <v-icon right>mdi-menu-down</v-icon>
+      <template #activator="{ props }">
+        <v-btn v-bind="props" variant="flat" class="px-3" height="48">
+          <v-icon class="mr-2">mdi-account-circle</v-icon>
+
+          <div class="text-left mr-2">
+            <div class="text-body-2 font-weight-medium text-truncate">
+              {{ userStore.user.email }}
+            </div>
+            <div class="text-caption text-success">
+              {{ userStore.formattedBalance }}
+            </div>
+          </div>
+
+          <v-icon size="18">mdi-chevron-down</v-icon>
         </v-btn>
       </template>
-      <v-list>
-        <v-list-item @click="editProfile">
-          <v-list-item-title>Edit Profile</v-list-item-title>
-        </v-list-item>
 
-        <v-list-item @click="confirmLogout">
-          <v-list-item-title>Logout</v-list-item-title>
+      <v-list>
+        <v-list-item>
+          <WalletDialog />
+        </v-list-item>
+        <v-list-item>
+          <MyBetsDialog />
+        </v-list-item>
+        <v-list-item>
+          <EditProfileDialog />
+        </v-list-item>
+        <v-list-item>
+          <LogoutDialog />
         </v-list-item>
       </v-list>
     </v-menu>
 
-    <v-btn v-if="!userStore.user" to="login-form" text> Login </v-btn>
-    <!-- <v-btn v-if="!userStore.user" to="register-form" text> Register </v-btn>
-    <v-btn v-if="!userStore.user" to="request-password-reset-form" text>
-      Forgot Password
-    </v-btn> -->
+    <v-spacer />
 
-    <!-- Logout Confirmation Dialog -->
-    <v-dialog v-model="logoutDialog" max-width="400">
-      <v-card>
-        <v-card-title class="text-h5">Confirm Logout</v-card-title>
-        <v-card-text>Are you sure you want to log out?</v-card-text>
-        <v-card-actions>
-          <v-spacer />
-          <v-btn color="red" text @click="logoutDialog = false">Cancel</v-btn>
-          <v-btn color="green" text @click="logout">Yes</v-btn>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
+    <!-- Account -->
   </v-app-bar>
+
+  <!-- Navigation Drawer for Mobile -->
+  <v-navigation-drawer
+    v-model="drawer"
+    temporary
+    elevation="2"
+    width="260"
+    class="app-drawer"
+  >
+    <!-- App Title -->
+    <div class="drawer-header">
+      <v-btn
+        :class="{ 'v-btn--active': isActive('/landing-page') }"
+        to="/"
+        text
+        block
+        class="casino-logo-btn"
+      >
+        <v-icon size="32" color="amber">mdi-cards</v-icon>
+        <span class="logo-text">{{ appTitle }}</span>
+      </v-btn>
+    </div>
+
+    <v-divider />
+
+    <!-- Navigation Buttons -->
+    <div class="drawer-btns">
+      <LoginDialog v-if="!userStore.user && !isActiveRoute('/login-form')" />
+
+      <RegistrationDialog v-if="!userStore.user" />
+    </div>
+
+    <v-list nav>
+      <v-btn
+        block
+        text
+        :class="{ 'v-btn--active': isActive('/play') }"
+        @click="go('/play')"
+        >Play</v-btn
+      >
+      <v-btn
+        block
+        text
+        :class="{ 'v-btn--active': isActive('/how-it-works') }"
+        @click="go('/how-it-works')"
+        >How It Works</v-btn
+      >
+      <v-btn
+        block
+        text
+        :class="{ 'v-btn--active': isActive('/support') }"
+        @click="go('/support')"
+        >Support</v-btn
+      >
+
+      <v-divider class="my-2" />
+
+      <WalletDialog />
+      <MyBetsDialog />
+      <EditProfileDialog />
+      <LogoutDialog />
+    </v-list>
+  </v-navigation-drawer>
 </template>
 
 <script setup>
-import { computed, ref } from "vue";
+import { ref, onMounted, watch } from "vue";
 import { useDisplay } from "vuetify";
 import { useUserStore } from "@/stores/user";
 import { useRouter, useRoute } from "vue-router";
+import LogoutDialog from "./LogoutDialog.vue";
+import RegistrationDialog from "./RegistrationDialog.vue";
+import LoginDialog from "./LoginDialog.vue";
+import EditProfileDialog from "./EditProfileDialog.vue";
+import WalletDialog from "./WalletDialog.vue";
+import MyBetsDialog from "./MyBetsDialog.vue";
 
 const route = useRoute();
-const router = useRouter();
-const { smAndDown } = useDisplay();
-const isSmallScreen = computed(() => smAndDown.value);
+const { mobile } = useDisplay();
+const drawer = ref(false);
 const userStore = useUserStore();
-const logoutDialog = ref(false);
+const appTitle = process.env.VUE_APP_TITLE;
+const router = useRouter();
 
-const links = [
-  { text: "TRANSACTIONS", route: "transaction-list" },
-  { text: "DRAFTS", route: "drafts-list" },
-  { text: "SUMMARY", route: "monthly-summary" },
-];
+const links = ref([]);
+const drawerLinks = ref([]);
+
+const isActive = (path) => route.path === path;
+const go = (path) => router.push(path);
+
+onMounted(async () => {
+  setupLinks();
+});
+
+const setupLinks = () => {
+  if (userStore.user) {
+    links.value = [
+      { text: "Items", route: "item-list" },
+      { text: "Projects", route: "project-list" },
+    ];
+
+    drawerLinks.value = [
+      { text: "Items", route: "item-list" },
+      { text: "Projects", route: "project-list" },
+      { text: "Jobs", route: "job-list" },
+      { text: "Archetypes", route: "archetype-list" },
+      { text: "Categories", route: "category-list" },
+      { text: "Usages", route: "usage-list" },
+      { text: "Brands", route: "brand-list" },
+    ];
+  } else {
+    links.value = [];
+    drawerLinks.value = [];
+  }
+};
+
+// Watch for changes in the responseStore to display the appropriate snackbar
+watch(
+  () => userStore.user,
+  () => {
+    setupLinks();
+  },
+  { deep: true }
+);
 
 // Safeguard to handle undefined or null paths
 const normalizePath = (path) => {
@@ -97,36 +218,6 @@ const normalizePath = (path) => {
 const isActiveRoute = (linkRoute) => {
   return normalizePath(route.path) === normalizePath(linkRoute);
 };
-
-const confirmLogout = () => {
-  logoutDialog.value = true;
-};
-
-const logout = async () => {
-  logoutDialog.value = false;
-  await userStore.logout();
-  router.push({ name: "login-form" });
-};
-
-const editProfile = () => {
-  router.push({ name: "edit-user" });
-};
-
-const routeToDiscordLink = () => {
-  router.push({ name: "route-to-discord-link" });
-};
-
-const myMangement = () => {
-  router.push({ name: "my-tools" });
-};
-
-const myRentals = () => {
-  router.push({ name: "my-rentals" });
-};
-
-const myLoans = () => {
-  router.push({ name: "my-loans" });
-};
 </script>
 
 <style>
@@ -134,5 +225,42 @@ const myLoans = () => {
   color: #1976d2;
   font-weight: bold;
   background-color: rgba(25, 118, 210, 0.1);
+}
+
+.app-drawer {
+  background: #121212;
+  color: #fff;
+}
+
+.drawer-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 20px;
+  font-size: 1.2rem;
+  font-weight: 600;
+}
+
+.drawer-title {
+  letter-spacing: 0.5px;
+}
+
+/* Ensure buttons take full width and stack vertically */
+.drawer-btns {
+  display: flex;
+  flex-direction: column; /* vertical stacking */
+  width: 100%;
+  padding: 8px;
+  gap: 8px;
+}
+
+.drawer-btn {
+  text-align: left; /* optional: align text to left */
+  border-radius: 12px;
+}
+
+.drawer-btn.active {
+  background: rgba(255, 215, 0, 0.15);
+  color: #ffd700;
 }
 </style>

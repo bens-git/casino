@@ -1,283 +1,205 @@
 import { defineStore } from "pinia";
+import useApi from "@/stores/api";
 import axios from "../axios";
-import { useResponseStore } from "./response";
-import { useLoadingStore } from "./loading";
+import { ref, computed } from "vue";
+import { loadStripe } from "@stripe/stripe-js";
+import { useLoadingStore } from "@/stores/loading";
+import { useResponseStore } from "@/stores/response";
 
-export const useUserStore = defineStore("user", {
-  state: () => ({
-    user: null,
-  }),
+const stripePromise = loadStripe(process.env.VUE_APP_STRIPE_PUBLIC_KEY);
 
-  actions: {
-    async register(userData) {
+export const useUserStore = defineStore(
+  "user",
+  () => {
+    /**
+     * Deposit funds using Stripe
+     */
+    const deposit = async ({ amount }) => {
+      const { sendRequest } = useApi();
       const loadingStore = useLoadingStore();
       const responseStore = useResponseStore();
-      responseStore.clearResponse();
-      loadingStore.startLoading("register");
+
+      loadingStore.startLoading("deposit");
 
       try {
-        const response = await axios.post("/register", userData);
-        responseStore.setResponse(true, response.data.message);
-      } catch (error) {
-        responseStore.setResponse(
-          false,
-          error.response.data?.message
-            ? error.response.data?.message
-            : error.response.data?.[0]?.message
-              ? error.response.data?.[0]?.message
-              : "",
-          [error.response.data.errors]
-        );
+        // 1️⃣ Ask backend to create PaymentIntent
+        const intentRes = await sendRequest("/user/deposit-intent", "POST", {
+          amount, // dollars
+        });
+
+        const { clientSecret } = intentRes.data;
+
+        // 2️⃣ Confirm payment on frontend
+        const stripe = await stripePromise;
+
+        const { paymentIntent, error: stripeError } =
+          await stripe.confirmCardPayment(clientSecret);
+
+        if (stripeError) {
+          throw new Error(stripeError.message);
+        }
+
+        // 3️⃣ Tell backend payment succeeded
+        const confirmRes = await sendRequest("/user/deposit-confirm", "POST", {
+          payment_intent_id: paymentIntent.id,
+        });
+
+        // 4️⃣ Update balance from backend
+        user.value.balance = confirmRes.data.balance;
+        responseStore.setResponse(true, confirmRes.data || "Success");
+
+        return confirmRes.data;
+      } catch (e) {
+        const error =
+          e.response?.data?.message || e.message || "Deposit failed";
+        responseStore.setResponse(false, error);
+
+        throw e;
       } finally {
-        loadingStore.stopLoading("register");
+        loadingStore.stopLoading("deposit");
       }
-    },
+    };
 
-    async login(email, password) {
-      const loadingStore = useLoadingStore();
-      const responseStore = useResponseStore();
-      responseStore.clearResponse();
-      loadingStore.startLoading("login");
+    const user = ref(null);
 
-      try {
-        const response = await axios.post("/login", { email, password });
-        const token = response.data.token;
+    const formattedBalance = computed(() => {
+      if (user.value.balance) {
+        return `$${user.value.balance?.toFixed(2)}`;
+      } else {
+        return `$0.00`;
+      }
+    });
 
+    const register = async (userData) => {
+      const { sendRequest } = useApi();
+      const data = await sendRequest("register", "POST", userData);
+
+      return data;
+    };
+
+    const login = async (params) => {
+      const { sendRequest } = useApi();
+      const response = await sendRequest("login", "post", params);
+
+      if (response?.success) {
+        console.log(response);
+        const token = response.token;
         localStorage.setItem("authToken", token);
         axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
 
-        await this.getUser();
-
-        responseStore.setResponse(true, "Login successful.");
-      } catch (error) {
-        console.log(error);
-        responseStore.setResponse(
-          false,
-          error.response.data?.message
-            ? error.response.data?.message
-            : error.response.data?.[0]?.message
-              ? error.response.data?.[0]?.message
-              : "",
-          [error.response.data.errors]
-        );
-      } finally {
-        loadingStore.stopLoading("login");
+        await show();
       }
-    },
+      return response;
+    };
 
-    loginToDiscord() {
-      // Discord OAuth2 parameters
-      const clientId = process.env.VUE_APP_DISCORD_CLIENT_ID;
-      const redirectUri = encodeURIComponent(
-        process.env.VUE_APP_DISCORD_REDIRECT_URI
-      );
+    const logout = async () => {
+      const { sendRequest } = useApi();
 
-      const responseType = "code"; // OAuth response type
-      const scope = "identify"; // Permissions requested
+      const response = await sendRequest("logout", "POST");
+      user.value = null;
 
-      // Construct the Discord OAuth2 authorization URL
-      const discordAuthUrl = `https://discord.com/api/oauth2/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=${responseType}&scope=${scope}`;
+      localStorage.removeItem("authToken");
+      localStorage.removeItem("user");
+      delete axios.defaults.headers.common["Authorization"];
+      return response;
+    };
 
-      // Redirect to Discord's OAuth2 page
-      window.location.href = discordAuthUrl;
-    },
+    const show = async () => {
+      const { fetchRequest } = useApi();
 
-    async linkWithDiscord(code) {
-      const loadingStore = useLoadingStore();
-      const responseStore = useResponseStore();
-      responseStore.clearResponse();
-      loadingStore.startLoading("linkWithDiscord");
+      const response = await fetchRequest("user");
+      console.log(response);
+      user.value = response.data;
+    };
 
-      try {
-        const response = await axios.post("/link-with-discord", { code: code });
-        await this.getUser();
-        responseStore.setResponse(true, response.data.message);
-      } catch (error) {
-        responseStore.setResponse(
-          false,
-          error.response.data?.message
-            ? error.response.data?.message
-            : error.response.data?.[0]?.message
-              ? error.response.data?.[0]?.message
-              : "",
-          [error.response.data.errors]
-        );
-      } finally {
-        loadingStore.stopLoading("linkWithDiscord");
+    const update = async (user) => {
+      const { sendRequest } = useApi();
+
+      const data = await sendRequest(`me`, "PUT", user);
+
+      if (data?.success) {
+        this.user = data.data;
       }
-    },
+    };
 
-    async logout() {
-      const loadingStore = useLoadingStore();
-      const responseStore = useResponseStore();
-      responseStore.clearResponse();
-      loadingStore.startLoading("logout");
+    const destroy = async () => {
+      const { sendRequest } = useApi();
 
-      try {
-        await axios.post("/logout");
-        this.user = null;
+      const data = await sendRequest("user", "DELETE");
 
-        localStorage.removeItem("authToken");
-        delete axios.defaults.headers.common["Authorization"];
-        responseStore.setResponse(true, "Logout successful.");
-      } catch (error) {
+      if (data?.success) {
         this.user = null;
         localStorage.removeItem("authToken");
         localStorage.removeItem("user");
         delete axios.defaults.headers.common["Authorization"];
-        responseStore.setResponse(true, "Logout successful.");
-      } finally {
-        loadingStore.stopLoading("logout");
       }
-    },
 
-    async getUser() {
-      const loadingStore = useLoadingStore();
-      const responseStore = useResponseStore();
-      responseStore.clearResponse();
-      loadingStore.startLoading("getUser");
+      return data;
+    };
 
-      try {
-        const response = await axios.get("/user");
-        this.user = response.data;
-      } catch (error) {
-        console.log(error);
-        responseStore.setResponse(false, error.response.data.message, [
-          error.response.data.errors,
-        ]);
-      } finally {
-        loadingStore.stopLoading("getUser");
-      }
-    },
+    const patchPassword = async (
+      currentPassword,
+      newPassword,
+      confirmPassword
+    ) => {
+      const { sendRequest } = useApi();
 
-    async updateUser(user) {
-      const loadingStore = useLoadingStore();
-      const responseStore = useResponseStore();
-      responseStore.clearResponse();
-      loadingStore.startLoading("updateUser");
+      // Prepare the data to be sent in the request
+      const user = {
+        current_password: currentPassword,
+        new_password: newPassword,
+        new_password_confirmation: confirmPassword,
+      };
 
-      try {
-        const response = await axios.put(`/user/${user.id}`, user);
-        this.user = response.data;
-        responseStore.setResponse(true, "User updated successfully.");
-      } catch (error) {
-        responseStore.setResponse(false, error.response.data.message, [
-          error.response.data.errors,
-        ]);
-      } finally {
-        loadingStore.stopLoading("updateUser");
-      }
-    },
+      await sendRequest("/user/password", "PUT", user);
+    };
 
-    async deleteUser() {
-      const loadingStore = useLoadingStore();
-      const responseStore = useResponseStore();
-      responseStore.clearResponse();
-      loadingStore.startLoading("deleteUser");
+    const patchPasswordWithToken = async (
+      newPassword,
+      confirmPassword,
+      token
+    ) => {
+      const user = {
+        new_password: newPassword,
+        new_password_confirmation: confirmPassword,
+        token: token,
+      };
+      const { sendRequest } = useApi();
 
-      try {
-        await axios.delete(`/user`);
-        this.user = null;
-        responseStore.setResponse(true, "User deleted successfully.");
-      } catch (error) {
-        responseStore.setResponse(false, error.response.data.message, [
-          error.response.data.errors,
-        ]);
-      } finally {
-        loadingStore.stopLoading("deleteUser");
-      }
-    },
+      await sendRequest("/user/password-with-token", "PUT", user);
+    };
 
-    async changePassword(currentPassword, newPassword, confirmPassword) {
-      const loadingStore = useLoadingStore();
-      const responseStore = useResponseStore();
-      responseStore.clearResponse();
-      loadingStore.startLoading("changePassword");
+    const requestPasswordReset = async (email) => {
+      const { sendRequest } = useApi();
 
-      try {
-        // Prepare the data to be sent in the request
-        const data = {
-          current_password: currentPassword,
-          new_password: newPassword,
-          new_password_confirmation: confirmPassword,
-        };
+      await sendRequest("request-password-reset", "POST", email);
+    };
 
-        // Make the PUT request to update the password
-        await axios.put(`/user/password`, data);
-
-        // Update the user data if needed
-        // this.user = response.data; // Uncomment if you have user data to update
-
-        // Set success response
-        responseStore.setResponse(true, "User password updated successfully.");
-      } catch (error) {
-        // Set error response
-        responseStore.setResponse(false, error.response.data.message, [
-          error.response.data.errors,
-        ]);
-      } finally {
-        loadingStore.stopLoading("changePassword");
-      }
-    },
-
-    async changePasswordWithToken(newPassword, confirmPassword, token) {
-      const loadingStore = useLoadingStore();
-      const responseStore = useResponseStore();
-      responseStore.clearResponse();
-      loadingStore.startLoading("changePassword");
-
-      try {
-        // Prepare the data to be sent in the request
-        const data = {
-          new_password: newPassword,
-          new_password_confirmation: confirmPassword,
-          token: token,
-        };
-
-        // Make the PUT request to update the password
-        await axios.put(`/user/password-with-token`, data);
-
-        // Update the user data if needed
-        // this.user = response.data; // Uncomment if you have user data to update
-
-        // Set success response
-        responseStore.setResponse(true, "User password updated successfully.");
-      } catch (error) {
-        // Set error response
-        responseStore.setResponse(false, error.response.data.message, [
-          error.response.data.errors,
-        ]);
-      } finally {
-        loadingStore.stopLoading("changePassword");
-      }
-    },
-
-    async requestPasswordReset(email) {
-      const loadingStore = useLoadingStore();
-      const responseStore = useResponseStore();
-      responseStore.clearResponse();
-      loadingStore.startLoading("requestPasswordReset");
-
-      try {
-        await axios.post(`/request-password-reset`, email);
-        responseStore.setResponse(true, "Password request sent.");
-      } catch (error) {
-        responseStore.setResponse(false, error.response.data.message, [
-          error.response.data.errors,
-        ]);
-      } finally {
-        loadingStore.stopLoading("requestPasswordReset");
-      }
-    },
+    return {
+      deposit,
+      destroy,
+      login,
+      logout,
+      patchPassword,
+      patchPasswordWithToken,
+      register,
+      requestPasswordReset,
+      show,
+      update,
+      user,
+      formattedBalance,
+    };
   },
 
-  persist: {
-    enabled: true,
-    strategies: [
-      {
-        key: "userStore",
-        storage: localStorage,
-      },
-    ],
-  },
-});
+  {
+    persist: {
+      enabled: true,
+      strategies: [
+        {
+          key: "userStore",
+          storage: localStorage,
+        },
+      ],
+    },
+  }
+);

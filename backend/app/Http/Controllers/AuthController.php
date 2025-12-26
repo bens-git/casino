@@ -2,18 +2,22 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
+use App\Mail\PasswordResetEmail;
+use App\Mail\ValidateUserEmail;
+use App\Models\Item;
 use App\Models\Location;
+use App\Models\Rental;
 use App\Models\User;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
-use App\Mail\ValidateUserEmail;
-use App\Mail\PasswordResetEmail;
 use Illuminate\Support\Str;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\ValidationException;
-use GuzzleHttp\Client;
-use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Storage;
+use Stripe\Stripe;
+use Stripe\PaymentIntent;
 
 class Coordinates
 {
@@ -29,6 +33,77 @@ class Coordinates
 
 class AuthController extends Controller
 {
+
+    public function depositIntent(Request $request)
+    {
+        $request->validate([
+            'amount' => ['required', 'numeric', 'min:10', 'max:5000'],
+        ]);
+
+        $user = $request->user();
+
+        Stripe::setApiKey(config('services.stripe.secret'));
+
+        // Amount in cents
+        $amountCents = intval($request->amount * 100);
+
+        $paymentIntent = PaymentIntent::create([
+            'amount' => $amountCents,
+            'currency' => 'cad',
+            'metadata' => [
+                'user_id' => $user->id,
+                'type' => 'deposit',
+            ],
+        ]);
+
+        return response()->json([
+            'clientSecret' => $paymentIntent->client_secret,
+        ]);
+    }
+
+    public function depositConfirm(Request $request)
+    {
+        $request->validate([
+            'payment_intent_id' => ['required', 'string'],
+        ]);
+
+        $user = $request->user();
+
+        Stripe::setApiKey(config('services.stripe.secret'));
+
+        $paymentIntent = PaymentIntent::retrieve($request->payment_intent_id);
+
+        if ($paymentIntent->status !== 'succeeded') {
+            return response()->json([
+                'message' => 'Payment not completed'
+            ], 400);
+        }
+
+        // Use a transaction to ensure atomicity
+        DB::transaction(function () use ($user, $paymentIntent) {
+            // Convert cents to dollars
+            $amount = $paymentIntent->amount / 100;
+
+            // Credit user balance
+            $user->balance += $amount;
+            $user->save();
+
+            // Log transaction
+            $user->transactions()->create([
+                'type' => 'deposit',
+                'amount' => $amount,
+                'status' => 'completed',
+                'method' => 'stripe',
+                'payment_intent_id' => $paymentIntent->id,
+            ]);
+        });
+
+        return response()->json([
+            'balance' => $user->balance,
+        ]);
+    }
+
+
     public function register(Request $request)
     {
 
@@ -36,8 +111,13 @@ class AuthController extends Controller
             'name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255',
             'password' => 'required|string|min:8',
+            'repeatPassword' => 'required|string|same:password',
+            'city' => 'required|string|max:255',
+            'state' => 'required|string|max:255',
+            'country' => 'required|string|max:255',
 
         ]);
+
 
         // Check if the email already exists with an email_verification_token
         $existingUser = User::where('email', $validatedData['email'])
@@ -60,11 +140,8 @@ class AuthController extends Controller
             'email' => 'unique:users',
         ]);
 
-
-
         // Create a new user
         $user = User::create([
-            'name' => $validatedData['name'],
             'email' => $validatedData['email'],
             'password' => Hash::make($validatedData['password']),
             'email_verification_token' => Str::random(60),
@@ -74,9 +151,17 @@ class AuthController extends Controller
         // Send validation email
         Mail::to($user->email)->send(new ValidateUserEmail($user));
 
-        return response()->json(['message' => 'User registered successfully. Please check your email to validate your account.']);
+        return response()->json(['success' => true, 'message' => 'User registered successfully. Please check your email to validate your account.']);
     }
 
+    public function show()
+    {
+        $user = Auth::user();
+        if ($user instanceof \App\Models\User) {
+            $user->load('location');
+        }
+        return response()->json(['success' => true, 'data' => $user]);
+    }
 
     public function requestPasswordReset(Request $request)
     {
@@ -110,35 +195,6 @@ class AuthController extends Controller
         }
     }
 
-    private function getCoordinatesFromAddress($data)
-    {
-        // Construct the full address
-        $address = urlencode("{$data['city']}, {$data['state']},  {$data['country']}}");
-
-        // Make the request to the Nominatim API
-        $url = "https://nominatim.openstreetmap.org/search?q={$address}&format=json&limit=1";
-
-        $client = new Client();
-
-        // Make the request
-        $response = $client->request('GET', $url, [
-            'headers' => [
-                'User-Agent' => 'YourAppName/1.0 (your-email@example.com)'
-            ]
-        ]);
-
-        // Get the body and decode the JSON
-        $body = $response->getBody()->getContents();
-        $data = json_decode($body, true);
-
-        // Check if any result is returned
-        if (!empty($data) && isset($data[0])) {
-            return new Coordinates($data[0]['lat'], $data[0]['lon']);
-        }
-        // Return a fallback or throw an exception if no result is found
-        throw new \Exception("Coordinates not found for the given address.");
-    }
-
     public function validateEmail($token)
     {
         $user = User::where('email_verification_token', $token)->first();
@@ -155,9 +211,6 @@ class AuthController extends Controller
 
         return redirect()->away(config('app.front_end_url') . '/email-verified?success=true');
     }
-
-
-
 
     public function resetPasswordWithToken(Request $request)
     {
@@ -185,6 +238,7 @@ class AuthController extends Controller
 
     public function login(Request $request)
     {
+
         $request->validate([
             'email' => 'required|email',
             'password' => 'required',
@@ -193,12 +247,12 @@ class AuthController extends Controller
         $user = User::where('email', $request->email)->first();
 
         if (!$user || !Hash::check($request->password, $user->password)) {
-            return response()->json([['message' => 'Invalid credentials']], 401);
+            return response()->json(['success' => false,  'errors' => ['password' => ['Invalid credentials']]], 400);
         }
 
         $token = $user->createToken('API Token')->plainTextToken;
 
-        return response()->json(['token' => $token]);
+        return response()->json(['success' => true, 'token' => $token]);
     }
 
     public function logout(Request $request)
@@ -215,7 +269,7 @@ class AuthController extends Controller
      * @param  \Illuminate\Http\Request  $request
      * @return \Illuminate\Http\JsonResponse
      */
-    public function update(Request $request, $userId)
+    public function update(Request $request)
     {
         // Get the authenticated user
         $user = Auth::user();
@@ -223,94 +277,31 @@ class AuthController extends Controller
         // Validate the request data
         $validatedData = $request->validate([
             'name' => 'required|string|max:255',
-            'location_id' => 'required|exists:locations,id',
-
         ]);
 
         // Update the user fields
         $user->name = $validatedData['name'];
-        $user->location_id = $validatedData['location_id'];
 
         // Save the updated user and location
         /** @var \App\Models\User $user */
         $user->save();
+        $user->load('location');
 
         // Return the updated user data
-        return response()->json($user);
-    }
-
-    /**
-     * Update the authenticated user's associated location.
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @param  int  $locationId
-     * @return \Illuminate\Http\JsonResponse
-     */
-    public function updateLocation(Request $request, $locationId)
-    {
-        // Get the authenticated user
-        $user = Auth::user();
-
-        // Check if the location belongs to the user
-        if ($user->location_id !== (int) $locationId) {
-            return response()->json(['error' => 'Unauthorized'], 403);
-        }
-
-        // Validate the request data
-        $validatedData = $request->validate([
-            'street_address' => 'required|string|max:255',
-            'city' => 'required|string|max:255',
-            'state' => 'required|string|max:255',
-            'country' => 'required|string|max:255',
-            'postal_code' => 'required|string|max:20',
-            'building_name' => 'nullable|string|max:255',
-            'floor_number' => 'nullable|integer',
-            'unit_number' => 'nullable|integer',
-        ]);
-
-        // Find the location and update it
-        $location = Location::findOrFail($locationId);
-        $location->update($validatedData);
-
-        // Return the updated location data
-        return response()->json($location);
-    }
-
-
-    /**
-     * Get the authenticated user's location.
-     *
-     * @return \Illuminate\Http\JsonResponse
-     */
-    public function getLocation()
-    {
-        // Get the authenticated user
-        $user = Auth::user();
-
-
-        // Check if the user has an associated location
-        if ($user && $user->location) {
-            return response()->json([
-                'success' => true,
-                'location' => $user->location
-            ]);
-        }
-
-        // If the user has no associated location, return a not found response
-        return response()->json([
-            'success' => false,
-            'message' => 'Location not found'
-        ], 404);
+        return response()->json(['success' => true, 'data' => $user]);
     }
 
     public function deleteUser()
     {
         $user = Auth::user();
 
+        $response = DB::transaction(function () use ($user) {
 
-        /** @var \App\Models\User $user */
-        $user->delete();
-        return response()->json(['message' => 'User deleted successfully.']);
+            /** @var \App\Models\User $user */
+            $user->delete();
+        });
+
+        return response()->json(['success' => true, 'message' => 'User deleted successfully.']);
     }
     /**
      * Update the authenticated user's password.
@@ -341,69 +332,5 @@ class AuthController extends Controller
         $user->save();
 
         return response()->json(['message' => 'Password updated successfully.']);
-    }
-
-
-    public function linkWithDiscord(Request $request)
-    {
-        $code = $request->code;
-        if (!$code) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Unauthorized'
-            ], 403);
-        }
-        //  return config('app.discord_redirect_uri');
-        $response = Http::asForm()->post('https://discord.com/api/oauth2/token', [
-            'client_id' => config('app.discord_client_id'),
-            'client_secret' => config('app.discord_client_secret'),
-            'grant_type' => 'authorization_code',
-            'code' => $code,
-            'redirect_uri' => config('app.discord_redirect_uri'),
-        ]);
-
-        $data = $response->json();
-
-        if (!isset($data['access_token'])) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Unauthorized'
-            ], 403);
-        }
-
-        // Fetch user info from Discord
-        $userResponse = Http::withToken($data['access_token'])->get('https://discord.com/api/users/@me');
-
-        $discordUser = $userResponse->json();
-
-
-        if (isset($discordUser['id'])) {
-
-            //if logged in, associate this discord user with the logged in user
-            $user = User::find(Auth::id());
-
-
-            if ($user) {
-
-
-                $user->discord_user_id = $discordUser['id'];
-                $user->discord_username = $discordUser['username'];
-                $user->discord_discriminator = $discordUser['discriminator'];
-                $user->save();
-
-                return response()->json([
-                    'success' => true,
-                    'message' => 'Discord Linked',
-                ], 200);
-            }
-        }
-
-
-        if (!isset($data['access_token'])) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Unauthorized'
-            ], 403);
-        }
     }
 }

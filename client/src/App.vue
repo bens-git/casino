@@ -1,30 +1,14 @@
 <template>
   <v-app>
     <v-main>
-      <TopMenu @toggleDrawer="drawer = !drawer" />
-
-      <v-navigation-drawer v-model="drawer" app temporary>
-        <v-list>
-          <v-list-item
-            v-for="link in links"
-            :key="link.text"
-            @click="drawer = false"
-          >
-            <v-list-item-title>
-              <v-btn :href="link.url">
-                {{ link.text }}
-              </v-btn>
-            </v-list-item-title>
-          </v-list-item>
-        </v-list>
-      </v-navigation-drawer>
+      <TopMenu />
 
       <router-view />
 
       <!-- Snackbar for error messages -->
-      <v-snackbar v-model="showError" multi-line :timeout="5000">
+      <v-snackbar v-model="showError" color="error" multi-line :timeout="5000">
         {{ responseStore.response.message }}
-        <template v-slot:actions>
+        <template #actions>
           <v-btn variant="text" @click="showError = false"> Close </v-btn>
         </template>
       </v-snackbar>
@@ -38,7 +22,7 @@
       >
         {{ responseStore.response.message }}
 
-        <template v-slot:actions>
+        <template #actions>
           <v-btn variant="text" @click="showSuccess = false"> Close </v-btn>
         </template>
       </v-snackbar>
@@ -73,7 +57,10 @@ export default {
     watch(
       () => responseStore.response,
       (newResponse) => {
-        if (newResponse.errors.length > 0) {
+        if (
+          Object.keys(newResponse.errors).length ||
+          (!newResponse.success && newResponse.message)
+        ) {
           showError.value = true;
         } else if (newResponse.success) {
           showSuccess.value = true;
@@ -88,30 +75,22 @@ export default {
     );
 
     return {
-      drawer: false,
       showError,
       showSuccess,
       userStore,
       loadingStore,
       responseStore,
       isLoading,
-      links: [{ text: "TRANSACTIONS", route: "/" }],
     };
   },
 };
 </script>
+
 <style>
 html,
 body,
 #app {
   height: 100%;
   margin: 0;
-  overflow: hidden !important; /* Disable vertical scrolling for the entire app */
-}
-
-.v-application {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
 }
 </style>

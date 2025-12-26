@@ -1,3 +1,3 @@
-cd /var/www/accounting-dev/client;
-pm2 start --name=accounting-dev-client npm -- run serve;
+cd /var/www/casino/client;
+pm2 start --name=casino-client npm -- run serve;
 

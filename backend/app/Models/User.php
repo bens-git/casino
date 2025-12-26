@@ -23,7 +23,9 @@ class User extends Authenticatable
         'password',
         'location_id',
         'email_verification_token',
-        'password_reset_token'
+        'password_reset_token',
+        'is_admin',
+        'balance'
     ];
 
     /**
@@ -44,13 +46,4 @@ class User extends Authenticatable
     protected $casts = [
         'email_verified_at' => 'datetime',
     ];
-
-
-    /**
-     * Get the location associated with the user.
-     */
-    public function location()
-    {
-        return $this->belongsTo(Location::class);
-    }
 }

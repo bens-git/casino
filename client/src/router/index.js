@@ -1,64 +1,36 @@
 import { createRouter, createWebHistory } from "vue-router";
 import EmailVerified from "@/components/EmailVerified.vue";
-import EditUser from "@/components/EditUser.vue";
-import LoginForm from "@/components/LoginForm.vue";
-import TransactionList from "@/components/TransactionList.vue";
-import MonthlySummary from "@/components/MonthlySummary.vue";
+import LandingPage from "@/components/LandingPage.vue";
+
 import { useUserStore } from "@/stores/user"; // Adjust the import path as necessary
 
 const routes = [
   {
-    path: "/monthly-summary",
-    name: "monthly-summary",
-    component: MonthlySummary,
-    meta: { requiresAuth: true },
-  },
-  {
-    path: "/transaction-list",
-    name: "transaction-list",
-    component: TransactionList,
-    meta: { requiresAuth: true },
+    path: "/landing-page",
+    name: "landing-page",
+    component: LandingPage,
+    meta: { requiresAuth: false },
   },
 
   {
-    path: "/drafts-list",
-    name: "drafts-list",
-    component: () => import("@/components/DraftsList.vue"),
-    meta: { requiresAuth: true },
+    path: "/play",
+    name: "play",
+    component: () => import("@/components/PlayFiftyFifty.vue"),
   },
 
   {
-    path: "/login-form",
-    name: "login-form",
-    component: LoginForm,
-    meta: { requiresGuest: true }, // Only accessible if not logged in
-  },
-
-  {
-    path: "/register-form",
-    component: () => import("@/components/RegisterForm.vue"),
-    meta: { requiresGuest: true }, // Only accessible if not logged in
+    path: "/how-it-works",
+    name: "how-it-works",
+    component: () => import("@/components/HowItWorks.vue"),
   },
   {
-    path: "/request-password-reset-form",
-    component: () => import("@/components/RequestPasswordResetForm.vue"),
-    meta: { requiresGuest: true }, // Only accessible if not logged in
+    path: "/support",
+    name: "support",
+    component: () => import("@/components/SupportForm.vue"),
   },
-  {
-    path: "/reset-password",
-    component: () => import("@/components/ResetPassword.vue"),
-    meta: { requiresGuest: true }, // Only accessible if not logged in
-  },
-  {
-    path: "/edit-user",
-    name: "edit-user",
-    component: EditUser,
-    meta: { requiresAuth: true },
-  },
-
   {
     path: "/:catchAll(.*)",
-    redirect: "/transaction-list",
+    redirect: "/landing-page",
   },
   {
     path: "/email-verified",
@@ -75,22 +47,19 @@ const router = createRouter({
 router.beforeEach((to, from, next) => {
   const userStore = useUserStore();
   const isAuthenticated = !!userStore.user; // Check if user is logged in
-  const isDiscordAuthenticated =
-    !!userStore.user && !!userStore.user.discord_user_id;
   const requiresAuth = to.meta.requiresAuth;
-  const requiresDiscord = to.meta.requiresDiscord;
 
   if (
     to.matched.some((record) => record.meta.requiresGuest) &&
     userStore.user
   ) {
     // Redirect to home page if user is already logged in
-    return next({ name: "transaction-list" });
+    return next({ name: "landing-page" });
   }
 
   if (requiresAuth && !isAuthenticated) {
     // Redirect to login if route requires authentication and user is not logged in
-    next({ name: "login-form" });
+    next({ name: "landing-page" });
   } else {
     next(); // Proceed to the route
   }

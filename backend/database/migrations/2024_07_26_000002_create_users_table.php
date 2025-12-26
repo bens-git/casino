@@ -15,8 +15,9 @@ class CreateUsersTable extends Migration
     {
         Schema::create('users', function (Blueprint $table) {
             $table->id();
-            $table->string('name');
+            $table->decimal('balance');
             $table->string('email')->unique();
+            $table->boolean('is_admin')->default(false);
             $table->string('email_verification_token')->nullable();
             $table->string('password_reset_token')->nullable();
             $table->timestamp('email_verified_at')->nullable();
@@ -24,7 +25,6 @@ class CreateUsersTable extends Migration
             $table->rememberToken();
             $table->timestamps();
             $table->index('email');
-            $table->integer('maintenance_percentage');
         });
     }
 

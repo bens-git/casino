@@ -22,6 +22,10 @@ module.exports = defineConfig({
   devServer: {
     client: false,
     host: "192.168.0.146",
-    port: 8091,
+    port: 8092,
+    // https: {
+    //   key: readFileSync("/var/www/certs/192.168.0.146.key"),
+    //   cert: readFileSync("/var/www/certs/192.168.0.146.crt"),
+    // },
   },
 });
